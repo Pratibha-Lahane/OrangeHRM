@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>report.html</title>
+    <link href="assets/style.css" rel="stylesheet" type="text/css"/></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) { // eslint-disable-line no-redeclare
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function findAll(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sortColumn(elem) {
+    toggleSortStates(elem);
+    const colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    let key;
+    if (elem.classList.contains('result')) {
+        key = keyResult;
+    } else if (elem.classList.contains('links')) {
+        key = keyLink;
+    } else {
+        key = keyAlpha;
+    }
+    sortTable(elem, key(colIndex));
+}
+
+function showAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(showExtras);
+}
+
+function hideAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(hideExtras);
+}
+
+function showExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.remove('collapsed');
+    expandcollapse.classList.remove('expander');
+    expandcollapse.classList.add('collapser');
+}
+
+function hideExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.add('collapsed');
+    expandcollapse.classList.remove('collapser');
+    expandcollapse.classList.add('expander');
+}
+
+function showFilters() {
+    let visibleString = getQueryParameter('visible') || 'all';
+    visibleString = visibleString.toLowerCase();
+    const checkedItems = visibleString.split(',');
+
+    const filterItems = document.getElementsByClassName('filter');
+    for (let i = 0; i < filterItems.length; i++) {
+        filterItems[i].hidden = false;
+
+        if (visibleString != 'all') {
+            filterItems[i].checked = checkedItems.includes(filterItems[i].getAttribute('data-test-result'));
+            filterTable(filterItems[i]);
+        }
+    }
+}
+
+function addCollapse() {
+    // Add links for show/hide all
+    const resulttable = find('table#results-table');
+    const showhideall = document.createElement('p');
+    showhideall.innerHTML = '<a href="javascript:showAllExtras()">Show all details</a> / ' +
+                            '<a href="javascript:hideAllExtras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+
+    // Add show/hide link to each result
+    findAll('.col-result').forEach(function(elem) {
+        const collapsed = getQueryParameter('collapsed') || 'Passed';
+        const extras = elem.parentNode.nextElementSibling;
+        const expandcollapse = document.createElement('span');
+        if (extras.classList.contains('collapsed')) {
+            expandcollapse.classList.add('expander');
+        } else if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add('collapsed');
+            expandcollapse.classList.add('expander');
+        } else {
+            expandcollapse.classList.add('collapser');
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener('click', function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains('collapsed')) {
+                showExtras(event.currentTarget);
+            } else {
+                hideExtras(event.currentTarget);
+            }
+        });
+    });
+}
+
+function getQueryParameter(name) {
+    const match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () { // eslint-disable-line no-unused-vars
+    resetSortHeaders();
+
+    addCollapse();
+
+    showFilters();
+
+    sortColumn(find('.initial-sort'));
+
+    findAll('.sortable').forEach(function(elem) {
+        elem.addEventListener('click',
+            function() {
+                sortColumn(elem);
+            }, false);
+    });
+}
+
+function sortTable(clicked, keyFunc) {
+    const rows = findAll('.results-table-row');
+    const reversed = !clicked.classList.contains('asc');
+    const sortedRows = sort(rows, keyFunc, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    const thead = document.getElementById('results-table-head');
+    document.getElementById('results-table').remove();
+    const parent = document.createElement('table');
+    parent.id = 'results-table';
+    parent.appendChild(thead);
+    sortedRows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName('BODY')[0].appendChild(parent);
+}
+
+function sort(items, keyFunc, reversed) {
+    const sortArray = items.map(function(item, i) {
+        return [keyFunc(item), i];
+    });
+
+    sortArray.sort(function(a, b) {
+        const keyA = a[0];
+        const keyB = b[0];
+
+        if (keyA == keyB) return 0;
+
+        if (reversed) {
+            return keyA < keyB ? 1 : -1;
+        } else {
+            return keyA > keyB ? 1 : -1;
+        }
+    });
+
+    return sortArray.map(function(item) {
+        const index = item[1];
+        return items[index];
+    });
+}
+
+function keyAlpha(colIndex) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[colIndex].firstChild.data.toLowerCase();
+    };
+}
+
+function keyLink(colIndex) {
+    return function(elem) {
+        const dataCell = elem.childNodes[1].childNodes[colIndex].firstChild;
+        return dataCell == null ? '' : dataCell.innerText.toLowerCase();
+    };
+}
+
+function keyResult(colIndex) {
+    return function(elem) {
+        const strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+            'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[colIndex].firstChild.data);
+    };
+}
+
+function resetSortHeaders() {
+    findAll('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    findAll('.sortable').forEach(function(elem) {
+        const icon = document.createElement('div');
+        icon.className = 'sort-icon';
+        icon.textContent = 'vvv';
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove('desc', 'active');
+        elem.classList.add('asc', 'inactive');
+    });
+}
+
+function toggleSortStates(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        resetSortHeaders();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function isAllRowsHidden(value) {
+    return value.hidden == false;
+}
+
+function filterTable(elem) { // eslint-disable-line no-unused-vars
+    const outcomeAtt = 'data-test-result';
+    const outcome = elem.getAttribute(outcomeAtt);
+    const classOutcome = outcome + ' results-table-row';
+    const outcomeRows = document.getElementsByClassName(classOutcome);
+
+    for(let i = 0; i < outcomeRows.length; i++){
+        outcomeRows[i].hidden = !elem.checked;
+    }
+
+    const rows = findAll('.results-table-row').filter(isAllRowsHidden);
+    const allRowsHidden = rows.length == 0 ? true : false;
+    const notFoundMessage = document.getElementById('not-found-message');
+    notFoundMessage.hidden = !allRowsHidden;
+}
+</script>
+    <h1>report.html</h1>
+    <p>Report generated on 26-May-2023 at 13:11:28 by <a href="https://pypi.python.org/pypi/pytest-html">pytest-html</a> v3.2.0</p>
+    <h2>Environment</h2>
+    <table id="environment">
+      <tr>
+        <td>Environment</td>
+        <td>Test</td></tr>
+      <tr>
+        <td>Module Name</td>
+        <td>Employee</td></tr>
+      <tr>
+        <td>Platform</td>
+        <td>Windows-10-10.0.22621-SP0</td></tr>
+      <tr>
+        <td>Project Name</td>
+        <td>OrangeHrm</td></tr>
+      <tr>
+        <td>Python</td>
+        <td>3.10.5</td></tr>
+      <tr>
+        <td>Tester</td>
+        <td>Credence</td></tr></table>
+    <h2>Summary</h2>
+    <p>16 tests ran in 387.41 seconds. </p>
+    <p class="filter" hidden="true">(Un)check the boxes to filter the results.</p><input checked="true" class="filter" data-test-result="passed" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="passed">6 passed</span>, <input checked="true" class="filter" data-test-result="skipped" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="skipped">0 skipped</span>, <input checked="true" class="filter" data-test-result="failed" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="failed">10 failed</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="error">0 errors</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xfailed">0 expected failures</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xpassed">0 unexpected passes</span>
+    <h2>Results</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">Result</th>
+          <th class="sortable" col="name">Test</th>
+          <th class="sortable" col="duration">Duration</th>
+          <th class="sortable links" col="links">Links</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="4">No results found. Try to check the filters</th></tr></thead>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">TestCases_2day/test_addemp.py::Test_AddEmp::test_addemp_003</td>
+          <td class="col-duration">35.70</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;TestCases_2day.test_addemp.Test_AddEmp object at 0x0000015D061A4A60&gt;, setup = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;3a787e2ea53ed2b511340dcbfcc65c41&quot;)&gt;<br/><br/>    def test_addemp_003(self,setup):<br/>        self.driver = setup<br/>        self.log.info(&quot;test_addemp_003 Started&quot;)<br/>        self.log.info(&quot;Opening Browser&quot;)<br/>        self.driver.get(self.Url)<br/>        self.log.info(&quot;Going to this Url----&gt;&quot;+self.Url)<br/>        self.ae = AddEmployee(self.driver)<br/>        # driver = webdriver.Chrome()<br/>        # driver.implicitly_wait(5)<br/>        # driver.get(&quot;https://opensource-demo.orangehrmlive.com/&quot;)<br/>        self.lp = loginpage(self.driver)<br/>        self.log.info(&quot;login page open&quot;)<br/>        self.lp.Enter_UserName(self.username)<br/>        self.log.info(&quot;Entering Username--&gt;&quot;+self.username)<br/>        self.lp.Enter_Passwaord(self.password)<br/>        self.log.info(&quot;Entering password--&gt;&quot;+self.password)<br/>        self.lp.Click_login()<br/>        self.log.info(&quot;Click on login Button&quot;)<br/>    <br/>    <br/>    <br/>        # self.driver.find_element(By.XPATH, &quot;//input[@placeholder=&#x27;Username&#x27;]&quot;).send_keys(&quot;Admin&quot;)<br/>        # self.driver.find_element(By.XPATH, &quot;//input[@placeholder=&#x27;Password&#x27;]&quot;).send_keys(&quot;admin123&quot;)<br/>        # self.driver.find_element(By.XPATH, &quot;//button[normalize-space()=&#x27;Login&#x27;]&quot;).click()<br/>    <br/>    <br/>        self.ae.Click_PIM_Menu_Button()<br/>        self.log.info(&quot;Click on PIM_Menu Button&quot;)<br/>    <br/>        self.ae.Click_Add_Button()<br/>        self.log.info(&quot;Click on Add_Button&quot;)<br/>    <br/>        self.ae.Enter_FirstName(&quot;Komal&quot;)<br/>        self.log.info(&quot;Entering Firstname--&gt;&quot;)<br/>    <br/>        self.ae.Enter_MiddleName(&quot;Vish&quot;)<br/>        self.log.info(&quot;Entering Middlename--&gt;&quot;)<br/>    <br/>        self.ae.Enter_LastName(&quot;M&quot;)<br/>        self.log.info(&quot;Entering Lastname--&gt;&quot;)<br/>    <br/>&gt;       self.ae.Click_save_Button()<br/><br/>TestCases_2day\test_addemp.py:61: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/>PageObject\AddEmployeePage.py:34: in Click_save_Button<br/>    self.driver.find_element(*AddEmployee.Click_Save_Button_XPATH).click()<br/>C:\Users\91702\AppData\Local\Programs\Python\Python310\lib\site-packages\selenium\webdriver\remote\webelement.py:94: in click<br/>    self._execute(Command.CLICK_ELEMENT)<br/>C:\Users\91702\AppData\Local\Programs\Python\Python310\lib\site-packages\selenium\webdriver\remote\webelement.py:403: in _execute<br/>    return self._parent.execute(command, params)<br/>C:\Users\91702\AppData\Local\Programs\Python\Python310\lib\site-packages\selenium\webdriver\remote\webdriver.py:440: in execute<br/>    self.error_handler.check_response(response)<br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/><br/>self = &lt;selenium.webdriver.remote.errorhandler.ErrorHandler object at 0x0000015D061A6B60&gt;<br/>response = {&#x27;status&#x27;: 400, &#x27;value&#x27;: &#x27;{&quot;value&quot;:{&quot;error&quot;:&quot;element click intercepted&quot;,&quot;message&quot;:&quot;element click intercepted: Element ...dInitThunk [0x76687D59+25]\\n\\tRtlInitializeExceptionChain [0x7789B74B+107]\\n\\tRtlClearBits [0x7789B6CF+191]\\n&quot;}}&#x27;}<br/><br/>    def check_response(self, response: Dict[str, Any]) -&gt; None:<br/>        &quot;&quot;&quot;Checks that a JSON response from the WebDriver does not have an<br/>        error.<br/>    <br/>        :Args:<br/>         - response - The JSON response from the WebDriver server as a dictionary<br/>           object.<br/>    <br/>        :Raises: If the response contains an error message.<br/>        &quot;&quot;&quot;<br/>        status = response.get(&quot;status&quot;, None)<br/>        if not status or status == ErrorCode.SUCCESS:<br/>            return<br/>        value = None<br/>        message = response.get(&quot;message&quot;, &quot;&quot;)<br/>        screen: str = response.get(&quot;screen&quot;, &quot;&quot;)<br/>        stacktrace = None<br/>        if isinstance(status, int):<br/>            value_json = response.get(&quot;value&quot;, None)<br/>            if value_json and isinstance(value_json, str):<br/>                import json<br/>    <br/>                try:<br/>                    value = json.loads(value_json)<br/>                    if len(value) == 1:<br/>                        value = value[&quot;value&quot;]<br/>                    status = value.get(&quot;error&quot;, None)<br/>                    if not status:<br/>                        status = value.get(&quot;status&quot;, ErrorCode.UNKNOWN_ERROR)<br/>                        message = value.get(&quot;value&quot;) or value.get(&quot;message&quot;)<br/>                        if not isinstance(message, str):<br/>                            value = message<br/>                            message = message.get(&quot;message&quot;)<br/>                    else:<br/>                        message = value.get(&quot;message&quot;, None)<br/>                except ValueError:<br/>                    pass<br/>    <br/>        exception_class: Type[WebDriverException]<br/>        if status in ErrorCode.NO_SUCH_ELEMENT:<br/>            exception_class = NoSuchElementException<br/>        elif status in ErrorCode.NO_SUCH_FRAME:<br/>            exception_class = NoSuchFrameException<br/>        elif status in ErrorCode.NO_SUCH_SHADOW_ROOT:<br/>            exception_class = NoSuchShadowRootException<br/>        elif status in ErrorCode.NO_SUCH_WINDOW:<br/>            exception_class = NoSuchWindowException<br/>        elif status in ErrorCode.STALE_ELEMENT_REFERENCE:<br/>            exception_class = StaleElementReferenceException<br/>        elif status in ErrorCode.ELEMENT_NOT_VISIBLE:<br/>            exception_class = ElementNotVisibleException<br/>        elif status in ErrorCode.INVALID_ELEMENT_STATE:<br/>            exception_class = InvalidElementStateException<br/>        elif (<br/>            status in ErrorCode.INVALID_SELECTOR<br/>            or status in ErrorCode.INVALID_XPATH_SELECTOR<br/>            or status in ErrorCode.INVALID_XPATH_SELECTOR_RETURN_TYPER<br/>        ):<br/>            exception_class = InvalidSelectorException<br/>        elif status in ErrorCode.ELEMENT_IS_NOT_SELECTABLE:<br/>            exception_class = ElementNotSelectableException<br/>        elif status in ErrorCode.ELEMENT_NOT_INTERACTABLE:<br/>            exception_class = ElementNotInteractableException<br/>        elif status in ErrorCode.INVALID_COOKIE_DOMAIN:<br/>            exception_class = InvalidCookieDomainException<br/>        elif status in ErrorCode.UNABLE_TO_SET_COOKIE:<br/>            exception_class = UnableToSetCookieException<br/>        elif status in ErrorCode.TIMEOUT:<br/>            exception_class = TimeoutException<br/>        elif status in ErrorCode.SCRIPT_TIMEOUT:<br/>            exception_class = TimeoutException<br/>        elif status in ErrorCode.UNKNOWN_ERROR:<br/>            exception_class = WebDriverException<br/>        elif status in ErrorCode.UNEXPECTED_ALERT_OPEN:<br/>            exception_class = UnexpectedAlertPresentException<br/>        elif status in ErrorCode.NO_ALERT_OPEN:<br/>            exception_class = NoAlertPresentException<br/>        elif status in ErrorCode.IME_NOT_AVAILABLE:<br/>            exception_class = ImeNotAvailableException<br/>        elif status in ErrorCode.IME_ENGINE_ACTIVATION_FAILED:<br/>            exception_class = ImeActivationFailedException<br/>        elif status in ErrorCode.MOVE_TARGET_OUT_OF_BOUNDS:<br/>            exception_class = MoveTargetOutOfBoundsException<br/>        elif status in ErrorCode.JAVASCRIPT_ERROR:<br/>            exception_class = JavascriptException<br/>        elif status in ErrorCode.SESSION_NOT_CREATED:<br/>            exception_class = SessionNotCreatedException<br/>        elif status in ErrorCode.INVALID_ARGUMENT:<br/>            exception_class = InvalidArgumentException<br/>        elif status in ErrorCode.NO_SUCH_COOKIE:<br/>            exception_class = NoSuchCookieException<br/>        elif status in ErrorCode.UNABLE_TO_CAPTURE_SCREEN:<br/>            exception_class = ScreenshotException<br/>        elif status in ErrorCode.ELEMENT_CLICK_INTERCEPTED:<br/>            exception_class = ElementClickInterceptedException<br/>        elif status in ErrorCode.INSECURE_CERTIFICATE:<br/>            exception_class = InsecureCertificateException<br/>        elif status in ErrorCode.INVALID_COORDINATES:<br/>            exception_class = InvalidCoordinatesException<br/>        elif status in ErrorCode.INVALID_SESSION_ID:<br/>            exception_class = InvalidSessionIdException<br/>        elif status in ErrorCode.UNKNOWN_METHOD:<br/>            exception_class = UnknownMethodException<br/>        else:<br/>            exception_class = WebDriverException<br/>        if not value:<br/>            value = response[&quot;value&quot;]<br/>        if isinstance(value, str):<br/>            raise exception_class(value)<br/>        if message == &quot;&quot; and &quot;message&quot; in value:<br/>            message = value[&quot;message&quot;]<br/>    <br/>        screen = None  # type: ignore[assignment]<br/>        if &quot;screen&quot; in value:<br/>            screen = value[&quot;screen&quot;]<br/>    <br/>        stacktrace = None<br/>        st_value = value.get(&quot;stackTrace&quot;) or value.get(&quot;stacktrace&quot;)<br/>        if st_value:<br/>            if isinstance(st_value, str):<br/>                stacktrace = st_value.split(&quot;\n&quot;)<br/>            else:<br/>                stacktrace = []<br/>                try:<br/>                    for frame in st_value:<br/>                        line = frame.get(&quot;lineNumber&quot;, &quot;&quot;)<br/>                        file = frame.get(&quot;fileName&quot;, &quot;&lt;anonymous&gt;&quot;)<br/>                        if line:<br/>                            file = f&quot;{file}:{line}&quot;<br/>                        meth = frame.get(&quot;methodName&quot;, &quot;&lt;anonymous&gt;&quot;)<br/>                        if &quot;className&quot; in frame:<br/>                            meth = f&quot;{frame[&#x27;className&#x27;]}.{meth}&quot;<br/>                        msg = &quot;    at %s (%s)&quot;<br/>                        msg = msg % (meth, file)<br/>                        stacktrace.append(msg)<br/>                except TypeError:<br/>                    pass<br/>        if exception_class == UnexpectedAlertPresentException:<br/>            alert_text = None<br/>            if &quot;data&quot; in value:<br/>                alert_text = value[&quot;data&quot;].get(&quot;text&quot;)<br/>            elif &quot;alert&quot; in value:<br/>                alert_text = value[&quot;alert&quot;].get(&quot;text&quot;)<br/>            raise exception_class(message, screen, stacktrace, alert_text)  # type: ignore[call-arg]  # mypy is not smart enough here<br/>&gt;       raise exception_class(message, screen, stacktrace)<br/><span class="error">E       selenium.common.exceptions.ElementClickInterceptedException: Message: element click intercepted: Element &lt;button type=&quot;submit&quot; class=&quot;oxd-button oxd-button--medium oxd-button--secondary orangehrm-left-space&quot; data-v-10d463b7=&quot;&quot; data-v-7fe2d320=&quot;&quot;&gt;...&lt;/button&gt; is not clickable at point (1405, 491). Other element would receive the click: &lt;div class=&quot;oxd-form-loader&quot; data-v-d5bfe35b=&quot;&quot;&gt;...&lt;/div&gt;</span><br/><span class="error">E         (Session info: chrome=113.0.5672.127)</span><br/><span class="error">E       Stacktrace:</span><br/><span class="error">E       Backtrace:</span><br/><span class="error">E       	GetHandleVerifier [0x00F98893+48451]</span><br/><span class="error">E       	(No symbol) [0x00F2B8A1]</span><br/><span class="error">E       	(No symbol) [0x00E35058]</span><br/><span class="error">E       	(No symbol) [0x00E64BA4]</span><br/><span class="error">E       	(No symbol) [0x00E636E8]</span><br/><span class="error">E       	(No symbol) [0x00E61EEB]</span><br/><span class="error">E       	(No symbol) [0x00E612FE]</span><br/><span class="error">E       	(No symbol) [0x00E59AAC]</span><br/><span class="error">E       	(No symbol) [0x00E7A2BC]</span><br/><span class="error">E       	(No symbol) [0x00E59586]</span><br/><span class="error">E       	(No symbol) [0x00E7A614]</span><br/><span class="error">E       	(No symbol) [0x00E8C482]</span><br/><span class="error">E       	(No symbol) [0x00E7A0B6]</span><br/><span class="error">E       	(No symbol) [0x00E57E08]</span><br/><span class="error">E       	(No symbol) [0x00E58F2D]</span><br/><span class="error">E       	GetHandleVerifier [0x011F8E3A+2540266]</span><br/><span class="error">E       	GetHandleVerifier [0x01238959+2801161]</span><br/><span class="error">E       	GetHandleVerifier [0x0123295C+2776588]</span><br/><span class="error">E       	GetHandleVerifier [0x01022280+612144]</span><br/><span class="error">E       	(No symbol) [0x00F34F6C]</span><br/><span class="error">E       	(No symbol) [0x00F311D8]</span><br/><span class="error">E       	(No symbol) [0x00F312BB]</span><br/><span class="error">E       	(No symbol) [0x00F24857]</span><br/><span class="error">E       	BaseThreadInitThunk [0x76687D59+25]</span><br/><span class="error">E       	RtlInitializeExceptionChain [0x7789B74B+107]</span><br/><span class="error">E       	RtlClearBits [0x7789B6CF+191]</span><br/><br/>C:\Users\91702\AppData\Local\Programs\Python\Python310\lib\site-packages\selenium\webdriver\remote\errorhandler.py:245: ElementClickInterceptedException<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     Test_AddEmp:test_addemp.py:22 test_addemp_003 Started
+INFO     Test_AddEmp:test_addemp.py:23 Opening Browser
+INFO     Test_AddEmp:test_addemp.py:25 Going to this Url----&gt;https://opensource-demo.orangehrmlive.com/
+INFO     Test_AddEmp:test_addemp.py:31 login page open
+INFO     Test_AddEmp:test_addemp.py:33 Entering Username--&gt;Admin
+INFO     Test_AddEmp:test_addemp.py:35 Entering password--&gt;admin123
+INFO     Test_AddEmp:test_addemp.py:37 Click on login Button
+INFO     Test_AddEmp:test_addemp.py:47 Click on PIM_Menu Button
+INFO     Test_AddEmp:test_addemp.py:50 Click on Add_Button
+INFO     Test_AddEmp:test_addemp.py:53 Entering Firstname--&gt;
+INFO     Test_AddEmp:test_addemp.py:56 Entering Middlename--&gt;
+INFO     Test_AddEmp:test_addemp.py:59 Entering Lastname--&gt;<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">TestCases_2day/test_addemp_params.py::Test_AddEmp_Params::test_addemp_params_005[getDataforAddemp0]</td>
+          <td class="col-duration">1.65</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;TestCases_2day.test_addemp_params.Test_AddEmp_Params object at 0x0000015D061A4CD0&gt;<br/>setup = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;1302379ffd1c4c8714e88d730b810569&quot;)&gt;, getDataforAddemp = (&#x27;Komal&#x27;, &#x27;Vishal&#x27;, &#x27;Mande&#x27;, &#x27;pass&#x27;)<br/><br/>    def test_addemp_params_005(self,setup,getDataforAddemp):<br/>        self.driver = setup<br/>&gt;       print(&quot;data from getDataforAddemp prams&quot;+getDataforAddemp)<br/><span class="error">E       TypeError: can only concatenate str (not &quot;tuple&quot;) to str</span><br/><br/>TestCases_2day\test_addemp_params.py:22: TypeError<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">TestCases_2day/test_addemp_params.py::Test_AddEmp_Params::test_addemp_params_005[getDataforAddemp1]</td>
+          <td class="col-duration">1.85</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;TestCases_2day.test_addemp_params.Test_AddEmp_Params object at 0x0000015D061A5060&gt;<br/>setup = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;b0fcb26e52184a301072a6677d51a32f&quot;)&gt;, getDataforAddemp = (&#x27;&#x27;, &#x27;Abc&#x27;, &#x27;Xyz&#x27;, &#x27;fail&#x27;)<br/><br/>    def test_addemp_params_005(self,setup,getDataforAddemp):<br/>        self.driver = setup<br/>&gt;       print(&quot;data from getDataforAddemp prams&quot;+getDataforAddemp)<br/><span class="error">E       TypeError: can only concatenate str (not &quot;tuple&quot;) to str</span><br/><br/>TestCases_2day\test_addemp_params.py:22: TypeError<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">TestCases_2day/test_addemp_params.py::Test_AddEmp_Params::test_addemp_params_005[getDataforAddemp2]</td>
+          <td class="col-duration">1.76</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;TestCases_2day.test_addemp_params.Test_AddEmp_Params object at 0x0000015D061A50C0&gt;<br/>setup = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;753dc6538981095185a7445454dd1322&quot;)&gt;, getDataforAddemp = (&#x27;Admin&#x27;, &#x27;&#x27;, &#x27;Xyz&#x27;, &#x27;fail&#x27;)<br/><br/>    def test_addemp_params_005(self,setup,getDataforAddemp):<br/>        self.driver = setup<br/>&gt;       print(&quot;data from getDataforAddemp prams&quot;+getDataforAddemp)<br/><span class="error">E       TypeError: can only concatenate str (not &quot;tuple&quot;) to str</span><br/><br/>TestCases_2day\test_addemp_params.py:22: TypeError<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">TestCases_2day/test_addemp_params.py::Test_AddEmp_Params::test_addemp_params_005[getDataforAddemp3]</td>
+          <td class="col-duration">1.75</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;TestCases_2day.test_addemp_params.Test_AddEmp_Params object at 0x0000015D061A52D0&gt;<br/>setup = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;99812a5bd0c3d80115dbeb1ed03e214a&quot;)&gt;, getDataforAddemp = (&#x27;Admin1&#x27;, &#x27;admin1234&#x27;, &#x27;&#x27;, &#x27;fail&#x27;)<br/><br/>    def test_addemp_params_005(self,setup,getDataforAddemp):<br/>        self.driver = setup<br/>&gt;       print(&quot;data from getDataforAddemp prams&quot;+getDataforAddemp)<br/><span class="error">E       TypeError: can only concatenate str (not &quot;tuple&quot;) to str</span><br/><br/>TestCases_2day\test_addemp_params.py:22: TypeError<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">TestCases_2day/test_addemp_params.py::Test_AddEmp_Params::test_addemp_params_005[getDataforAddemp4]</td>
+          <td class="col-duration">1.98</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;TestCases_2day.test_addemp_params.Test_AddEmp_Params object at 0x0000015D061A5360&gt;<br/>setup = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;fb1f9b660629f9fe8fea02713e1ba046&quot;)&gt;, getDataforAddemp = (&#x27;&#x27;, &#x27;&#x27;, &#x27;Admin&#x27;, &#x27;fail&#x27;)<br/><br/>    def test_addemp_params_005(self,setup,getDataforAddemp):<br/>        self.driver = setup<br/>&gt;       print(&quot;data from getDataforAddemp prams&quot;+getDataforAddemp)<br/><span class="error">E       TypeError: can only concatenate str (not &quot;tuple&quot;) to str</span><br/><br/>TestCases_2day\test_addemp_params.py:22: TypeError<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">TestCases_2day/test_addemp_params.py::Test_AddEmp_Params::test_addemp_params_005[getDataforAddemp5]</td>
+          <td class="col-duration">1.80</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;TestCases_2day.test_addemp_params.Test_AddEmp_Params object at 0x0000015D061A53F0&gt;<br/>setup = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;5374f407fa8621e4a0a6a860d00dfa79&quot;)&gt;, getDataforAddemp = (&#x27;&#x27;, &#x27;admin1234&#x27;, &#x27;&#x27;, &#x27;fail&#x27;)<br/><br/>    def test_addemp_params_005(self,setup,getDataforAddemp):<br/>        self.driver = setup<br/>&gt;       print(&quot;data from getDataforAddemp prams&quot;+getDataforAddemp)<br/><span class="error">E       TypeError: can only concatenate str (not &quot;tuple&quot;) to str</span><br/><br/>TestCases_2day\test_addemp_params.py:22: TypeError<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">TestCases_2day/test_addemp_params.py::Test_AddEmp_Params::test_addemp_params_005[getDataforAddemp6]</td>
+          <td class="col-duration">1.97</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;TestCases_2day.test_addemp_params.Test_AddEmp_Params object at 0x0000015D061A5480&gt;<br/>setup = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;6bba079701f66ac89418c73b917ced84&quot;)&gt;, getDataforAddemp = (&#x27;Admin1&#x27;, &#x27;&#x27;, &#x27;&#x27;, &#x27;fail&#x27;)<br/><br/>    def test_addemp_params_005(self,setup,getDataforAddemp):<br/>        self.driver = setup<br/>&gt;       print(&quot;data from getDataforAddemp prams&quot;+getDataforAddemp)<br/><span class="error">E       TypeError: can only concatenate str (not &quot;tuple&quot;) to str</span><br/><br/>TestCases_2day\test_addemp_params.py:22: TypeError<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">TestCases_2day/test_addemp_params.py::Test_AddEmp_Params::test_addemp_params_005[getDataforAddemp7]</td>
+          <td class="col-duration">2.14</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;TestCases_2day.test_addemp_params.Test_AddEmp_Params object at 0x0000015D061A5510&gt;<br/>setup = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;bfbbf95e939ba597d516ae58853aa920&quot;)&gt;, getDataforAddemp = (&#x27; &#x27;, &#x27; &#x27;, &#x27; &#x27;, &#x27;fail&#x27;)<br/><br/>    def test_addemp_params_005(self,setup,getDataforAddemp):<br/>        self.driver = setup<br/>&gt;       print(&quot;data from getDataforAddemp prams&quot;+getDataforAddemp)<br/><span class="error">E       TypeError: can only concatenate str (not &quot;tuple&quot;) to str</span><br/><br/>TestCases_2day\test_addemp_params.py:22: TypeError<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">TestCases_2day/test_empsearch.py::Test_SearchEmp::test_searchemp_006</td>
+          <td class="col-duration">59.98</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;TestCases_2day.test_empsearch.Test_SearchEmp object at 0x0000015D061A5C00&gt;, setup = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;e87db522810bd40f975ea15abc023f32&quot;)&gt;<br/><br/>    def test_searchemp_006(self,setup):<br/>        self.driver = setup<br/>        self.log.info(&quot;test_searchemp_006 Started&quot;)<br/>        self.log.info(&quot;Opening Browser&quot;)<br/>        self.driver.get(self.Url)<br/>        self.log.info(&quot;Going to this Url----&gt;&quot;+self.Url)<br/>        self.ae = AddEmployee(self.driver)<br/>        # driver = webdriver.Chrome()<br/>        # driver.implicitly_wait(5)<br/>        # driver.get(&quot;https://opensource-demo.orangehrmlive.com/&quot;)<br/>        self.lp = loginpage(self.driver)<br/>        self.log.info(&quot;login page open&quot;)<br/>        self.lp.Enter_UserName(self.username)<br/>        self.log.info(&quot;Entering Username--&gt;&quot;+self.username)<br/>        self.lp.Enter_Passwaord(self.password)<br/>        self.log.info(&quot;Entering password--&gt;&quot;+self.password)<br/>        self.lp.Click_login()<br/>        self.log.info(&quot;Click on login Button&quot;)<br/>        self.ae.Click_PIM_Menu_Button()<br/>        self.log.info(&quot;Click on PIM_Menu Button&quot;)<br/>    <br/>    <br/>        self.se = EmployeeSearch(self.driver)<br/>        self.se.Click_on_empname()<br/>        self.se.Enter_EmpName(&quot;David&quot;)<br/>        self.log.info(&quot;Entering EmployeeName---&gt;&gt;&quot;)<br/>        time.sleep(5)<br/>        self.se.Click_on_SearchButton()<br/>        self.log.info(&quot;Clicking on SeachButton --&gt;&gt;&quot;)<br/>        #time.sleep(5)<br/>        #print(self.se.Search_Result())<br/>        time.sleep(5)<br/>        if self.se.Search_Result() == True:<br/>            self.log.info(&quot;search results Found&quot;)<br/>            self.log.info(&quot;test_searchemp_006 TestCase is passed.&quot;)<br/>            self.lp.Click_menu()<br/>            self.log.info(&quot;Clicking on Menu_Button&quot;)<br/>    <br/>            self.lp.Click_logout()<br/>            self.log.info(&quot;Clicking on Logout Button&quot;)<br/>    <br/>            assert True<br/>    <br/>        else:<br/>            self.log.info(&quot;search results Not Found&quot;)<br/>            self.lp.Click_menu()<br/>            self.log.info(&quot;Clicking on Menu_Button&quot;)<br/>    <br/>            self.lp.Click_logout()<br/>            self.log.info(&quot;Clicking on Logout Button&quot;)<br/>    <br/>            self.log.info(&quot;test_searchemp_006 TestCase is failed.&quot;)<br/>&gt;           assert False<br/><span class="error">E           assert False</span><br/><br/>TestCases_2day\test_empsearch.py:75: AssertionError<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     Test_SearchEmp:test_empsearch.py:25 test_searchemp_006 Started
+INFO     Test_SearchEmp:test_empsearch.py:26 Opening Browser
+INFO     Test_SearchEmp:test_empsearch.py:28 Going to this Url----&gt;https://opensource-demo.orangehrmlive.com/
+INFO     Test_SearchEmp:test_empsearch.py:34 login page open
+INFO     Test_SearchEmp:test_empsearch.py:36 Entering Username--&gt;Admin
+INFO     Test_SearchEmp:test_empsearch.py:38 Entering password--&gt;admin123
+INFO     Test_SearchEmp:test_empsearch.py:40 Click on login Button
+INFO     Test_SearchEmp:test_empsearch.py:42 Click on PIM_Menu Button
+INFO     Test_SearchEmp:test_empsearch.py:48 Entering EmployeeName---&gt;&gt;
+INFO     Test_SearchEmp:test_empsearch.py:51 Clicking on SeachButton --&gt;&gt;
+INFO     Test_SearchEmp:test_empsearch.py:67 search results Not Found
+INFO     Test_SearchEmp:test_empsearch.py:69 Clicking on Menu_Button
+INFO     Test_SearchEmp:test_empsearch.py:72 Clicking on Logout Button
+INFO     Test_SearchEmp:test_empsearch.py:74 test_searchemp_006 TestCase is failed.<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">TestCases_2day/test_login.py::Test_Login::test_Page_Title_001</td>
+          <td class="col-duration">59.42</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>INFO     Test_Login:test_login.py:24 test_Page_Title_001 is Started
+INFO     Test_Login:test_login.py:25 Opening Browser
+INFO     Test_Login:test_login.py:27 Go to this url----&gt;https://opensource-demo.orangehrmlive.com/
+INFO     Test_Login:test_login.py:33 test_page_Title_001 is Pass
+INFO     Test_Login:test_login.py:34 Page Title is ---&gt;OrangeHRM
+INFO     Test_Login:test_login.py:41 &lt;----------test_Page_Title_001 is Completed Successfully------&gt;<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">TestCases_2day/test_login.py::Test_Login::test_login_002</td>
+          <td class="col-duration">24.87</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>INFO     Test_Login:test_login.py:45 test_login_002 is Started.
+INFO     Test_Login:test_login.py:46 Opening Browser
+INFO     Test_Login:test_login.py:48 go to this Url---&gt;https://opensource-demo.orangehrmlive.com/
+INFO     Test_Login:test_login.py:53 login Page Open
+INFO     Test_Login:test_login.py:55 Entering UserName--&gt;Admin
+INFO     Test_Login:test_login.py:57 Entering Password--&gt;admin123
+INFO     Test_Login:test_login.py:59 Clicking_On_Login_Button
+INFO     Test_Login:test_login.py:63 test_login_002 TestCase is pass
+INFO     Test_Login:test_login.py:64 Clicking on Menu_Button
+INFO     Test_Login:test_login.py:66 Clicking on Logout Button
+INFO     Test_Login:test_login.py:76 &lt;-------Test_login_002 is completed Successfully-----&gt;<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">TestCases_2day/test_login_params.py::Test_Login_Params::test_login_params_004[getDataforlogin0]</td>
+          <td class="col-duration">61.40</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>INFO     Test_Login_Params:test_login_params.py:23 test_login_params_004 is Started.
+INFO     Test_Login_Params:test_login_params.py:24 Opening Browser
+INFO     Test_Login_Params:test_login_params.py:27 go to this Url---&gt;https://opensource-demo.orangehrmlive.com/
+INFO     Test_Login_Params:test_login_params.py:29 login Page Open
+INFO     Test_Login_Params:test_login_params.py:32 Entering UserName--&gt;Admin
+INFO     Test_Login_Params:test_login_params.py:35 Entering Password--&gt;admin123
+INFO     Test_Login_Params:test_login_params.py:37 Clicking_On_Login_Button
+INFO     Test_Login_Params:test_login_params.py:42 test_login_params_004 TestCase is pass
+INFO     Test_Login_Params:test_login_params.py:43 Clicking on Menu_Button
+INFO     Test_Login_Params:test_login_params.py:45 Clicking on Logout Button
+INFO     Test_Login_Params:test_login_params.py:65 &lt;-------Test_login_Params_004 is completed Successfully-----&gt;<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">TestCases_2day/test_login_params.py::Test_Login_Params::test_login_params_004[getDataforlogin1]</td>
+          <td class="col-duration">42.42</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>INFO     Test_Login_Params:test_login_params.py:23 test_login_params_004 is Started.
+INFO     Test_Login_Params:test_login_params.py:24 Opening Browser
+INFO     Test_Login_Params:test_login_params.py:27 go to this Url---&gt;https://opensource-demo.orangehrmlive.com/
+INFO     Test_Login_Params:test_login_params.py:29 login Page Open
+INFO     Test_Login_Params:test_login_params.py:32 Entering UserName--&gt;Admin1
+INFO     Test_Login_Params:test_login_params.py:35 Entering Password--&gt;admin123
+INFO     Test_Login_Params:test_login_params.py:37 Clicking_On_Login_Button
+INFO     Test_Login_Params:test_login_params.py:65 &lt;-------Test_login_Params_004 is completed Successfully-----&gt;<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">TestCases_2day/test_login_params.py::Test_Login_Params::test_login_params_004[getDataforlogin2]</td>
+          <td class="col-duration">42.53</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>INFO     Test_Login_Params:test_login_params.py:23 test_login_params_004 is Started.
+INFO     Test_Login_Params:test_login_params.py:24 Opening Browser
+INFO     Test_Login_Params:test_login_params.py:27 go to this Url---&gt;https://opensource-demo.orangehrmlive.com/
+INFO     Test_Login_Params:test_login_params.py:29 login Page Open
+INFO     Test_Login_Params:test_login_params.py:32 Entering UserName--&gt;Admin
+INFO     Test_Login_Params:test_login_params.py:35 Entering Password--&gt;admin1234
+INFO     Test_Login_Params:test_login_params.py:37 Clicking_On_Login_Button
+INFO     Test_Login_Params:test_login_params.py:65 &lt;-------Test_login_Params_004 is completed Successfully-----&gt;<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">TestCases_2day/test_login_params.py::Test_Login_Params::test_login_params_004[getDataforlogin3]</td>
+          <td class="col-duration">44.66</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>INFO     Test_Login_Params:test_login_params.py:23 test_login_params_004 is Started.
+INFO     Test_Login_Params:test_login_params.py:24 Opening Browser
+INFO     Test_Login_Params:test_login_params.py:27 go to this Url---&gt;https://opensource-demo.orangehrmlive.com/
+INFO     Test_Login_Params:test_login_params.py:29 login Page Open
+INFO     Test_Login_Params:test_login_params.py:32 Entering UserName--&gt;Admin1
+INFO     Test_Login_Params:test_login_params.py:35 Entering Password--&gt;admin1234
+INFO     Test_Login_Params:test_login_params.py:37 Clicking_On_Login_Button
+INFO     Test_Login_Params:test_login_params.py:65 &lt;-------Test_login_Params_004 is completed Successfully-----&gt;<br/></div></td></tr></tbody></table></body></html>
